@@ -1,6 +1,7 @@
 #!/bin/sh
 
 PATTERN="${1:-.}"	# e.g. regex | 8c Büffel oder z.b. 10c Digdigs oder 10+...
+PATTERN='8c\|10c\|10+'
 
 URL="https://jenaplan-weimar.de/vertretungsplan/"
 DEST_URL="http://10.63.22.98/2.html"
@@ -27,7 +28,7 @@ for URL_IFRAME in $( wget -qO - "$URL" | grep '<iframe src=' | tr '"' ' ' ); do 
 wget -qO "$HTML" "$URL_IFRAME" && \
 	cd "$SCRIPTDIR/data" && {
 		git add 'plan.html'
-		git commit --author="bot <bot@script.me>" -m "new plan" >/dev/null || exit
+		git commit --author="bot <bot@script.me>" -m "new plan" >/dev/null
 	}
 
 while read -r LINE; do {
@@ -42,5 +43,10 @@ while read -r LINE; do {
 	esac
 } done <"$HTML" >"$TEMPFILE"
 
-grep -q "$PATTERN" "$TEMPFILE" && echo "Treffer gefunden" && scp "$TEMPFILE" "$DEST_SCP" && echo "see: $DEST_URL"
+if grep -q "$PATTERN" "$TEMPFILE"; then
+	echo "Treffer gefunden" && scp "$TEMPFILE" "$DEST_SCP" && echo "see: $DEST_URL" && grep --color "$PATTERN" "$TEMPFILE"
+else
+	echo "kein Treffer für '$PATTERN'"
+fi
+
 rm -f "$TEMPFILE"
