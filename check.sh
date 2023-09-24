@@ -1,7 +1,9 @@
 #!/bin/sh
+#
+# while :; do ./check.sh ; sleep 900; done
 
 PATTERN="${1:-.}"	# e.g. regex | 8c Büffel oder z.b. 10c Digdigs oder 10+...
-PATTERN='8c\|10c\|10+'
+PATTERN='8c\|Büf\|10c\|10+'
 
 URL="https://jenaplan-weimar.de/vertretungsplan/"
 DEST_URL="http://10.63.22.98/2.html"
