@@ -9,7 +9,7 @@ URL="https://jenaplan-weimar.de/vertretungsplan/"
 DEST_URL="http://10.63.22.98/2.html"
 DEST_SCP="bastian@10.63.22.98:/var/www/html/2.html"
 
-SCRIPTDIR="$( CDPATH= cd -- "$( dirname -- "$0" )" && pwd )"
+SCRIPTDIR="$( CDPATH='' cd -- "$( dirname -- "$0" )" && pwd )"
 TEMPFILE="$( mktemp )" || exit 1
 HTML="$SCRIPTDIR/data/plan.html"
 mkdir -p "$SCRIPTDIR/data"
@@ -37,7 +37,14 @@ while read -r LINE; do {
 	case "$LINE" in
 		"<tr class='list odd'>"*|\
 		"<tr class='list even'>"*)
-			echo "$LINE" | grep "$PATTERN"
+			I=0
+			for WORD in $LINE; do {
+				case "$WORD" in *'</td>'*) I=$((I+1)) ;; esac
+				[ "$I" = 3 ] && {
+					echo "$WORD" | grep -q "$PATTERN" && echo "$LINE"
+					break
+				}
+			} done
 		;;
 		*)
 			echo "$LINE"
@@ -46,7 +53,7 @@ while read -r LINE; do {
 } done <"$HTML" >"$TEMPFILE"
 
 if grep -q "$PATTERN" "$TEMPFILE"; then
-	echo "Treffer gefunden" && scp "$TEMPFILE" "$DEST_SCP" && echo "see: $DEST_URL" && grep --color "$PATTERN" "$TEMPFILE"
+	echo "Treffer gefunden" && scp "$TEMPFILE" "$DEST_SCP" && echo "see: $DEST_URL" # && grep --color "$PATTERN" "$TEMPFILE"
 else
 	echo "kein Treffer für '$PATTERN'"
 fi
