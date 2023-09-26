@@ -2,10 +2,12 @@
 #
 # while :; do ./check.sh ; sleep 900; done
 
-PATTERN="${1:-.}"	# e.g. regex | 8c Büffel oder z.b. 10c Digdigs oder 10+...
-PATTERN='8c\|Büf\|10c\|10+'
+DEFAULT_URL='https://jenaplan-weimar.de/vertretungsplan/'
+DEFAULT_PATTERN='8c\|Büf'
 
-URL="https://jenaplan-weimar.de/vertretungsplan/"
+URL="${1:-$DEFAULT_URL}"
+PATTERN="${2:-$DEFAULT_PATTERN}"	# e.g. regex: '8c\|Büf' or '10c\|10+'
+
 DEST_URL="http://10.63.22.98/2.html"
 DEST_SCP="bastian@10.63.22.98:/var/www/html/2.html"
 
@@ -37,13 +39,17 @@ while read -r LINE; do {
 	case "$LINE" in
 		"<tr class='list odd'>"*|\
 		"<tr class='list even'>"*)
-			I=0
+			COLUMN=0
 			for WORD in $LINE; do {
-				case "$WORD" in *'</td>'*) I=$((I+1)) ;; esac
-				[ "$I" = 3 ] && {
-					echo "$WORD" | grep -q "$PATTERN" && echo "$LINE"
-					break
-				}
+				case "$WORD" in
+					*'</td>'*)
+						COLUMN=$(( COLUMN+1 ))
+						[ "$COLUMN" = 3 ] && {
+							echo "$WORD" | grep -q "$PATTERN" && echo "$LINE"
+							break
+						}
+					;;
+				esac
 			} done
 		;;
 		*)
