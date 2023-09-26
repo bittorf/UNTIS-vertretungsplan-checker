@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # while :; do ./check.sh ; sleep 900; done
 
@@ -7,12 +7,18 @@ DEFAULT_PATTERN='8c\|Büf'
 
 URL="${1:-$DEFAULT_URL}"
 PATTERN="${2:-$DEFAULT_PATTERN}"	# e.g. regex: '8c\|Büf' or '10c\|10+'
+NOTIFY="$3"				# e.g. JID => 49176xxxXXXxx@s.whatsapp.net
 
-DEST_URL="http://10.63.22.98/2.html"
-DEST_SCP="bastian@10.63.22.98:/var/www/html/2.html"
+command -v 'phantomjs' >/dev/null || { echo "missing 'phantomjs' in PATH from https://phantomjs.org/download.html"; exit 1; }
+command -v 'mdtest'    >/dev/null || { echo "missing 'mdtest' in PATH from https://github.com/tulir/whatsmeow/tree/main/mdtest"; exit 1; }
+
+test -f mdtest.db      || { echo "missing 'mdtest.db' in $PWD - please scan qrcode with 'mdtest'"; exit 1; }
+pidof mdtest >/dev/null || { echo "starting 'mdtest'"; coproc whatsapp_send { mdtest; }; }
 
 SCRIPTDIR="$( CDPATH='' cd -- "$( dirname -- "$0" )" && pwd )"
+cd "$SCRIPTDIR"        || exit 1
 TEMPFILE="$( mktemp )" || exit 1
+
 HTML="$SCRIPTDIR/data/plan.html"
 mkdir -p "$SCRIPTDIR/data"
 test -d "$SCRIPTDIR/data/.git" || ( cd "$SCRIPTDIR/data" && git init )
@@ -22,6 +28,27 @@ log()
 	echo "$*" >>"$SCRIPTDIR/log.txt"
 }
 
+html_screenshot()
+{
+	local file="$TEMPFILE"
+	local image='plan.png'
+	local url=
+
+	cp "$file" foo.html && url="file://$PWD/foo.html"
+
+	cat >phantomjs.script <<EOF
+var page = require('webpage').create();
+page.open('$url', function() {
+    setTimeout(function() {
+        page.render('$image');
+        phantom.exit();
+    }, 200);
+});
+EOF
+	phantomjs phantomjs.script
+	rm phantomjs.script foo.html && echo "plan.png"
+}
+
 # e.g.: https://vplan.jenaplan-weimar.de/Vertretungsplaene/SchuelerInnen/subst_001.htm
 for URL_IFRAME in $( wget -qO - "$URL" | grep '<iframe src=' | tr '"' ' ' ); do {
 	case "$URL_IFRAME" in
@@ -29,10 +56,11 @@ for URL_IFRAME in $( wget -qO - "$URL" | grep '<iframe src=' | tr '"' ' ' ); do 
 	esac
 } done
 
-wget -qO "$HTML" "$URL_IFRAME" && \
+wget -qO "$HTML" "${URL_IFRAME:-$URL}" && \
 	cd "$SCRIPTDIR/data" && {
 		git add 'plan.html'
 		git commit --author="bot <bot@script.me>" -m "new plan" >/dev/null
+		cd - >/dev/null || exit 1
 	}
 
 while read -r LINE; do {
@@ -59,7 +87,12 @@ while read -r LINE; do {
 } done <"$HTML" >"$TEMPFILE"
 
 if grep -q "$PATTERN" "$TEMPFILE"; then
-	echo "Treffer gefunden" && scp "$TEMPFILE" "$DEST_SCP" && echo "see: $DEST_URL" # && grep --color "$PATTERN" "$TEMPFILE"
+	# html_screenshot debug
+	IMAGE="$( html_screenshot )"
+	echo "debug: sendimg $NOTIFY $IMAGE"
+
+	echo "Treffer gefunden" && echo "sendimg $NOTIFY $IMAGE" >&"${whatsapp_send[1]}"
+	sleep 3
 else
 	echo "kein Treffer für '$PATTERN'"
 fi
