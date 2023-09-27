@@ -1,5 +1,6 @@
 ### Setup
 * install 'phantomjs' from https://phantomjs.org/download.html
+
 ´´´
 # needs root permissions!
 # extract 'phantomjs' into '/usr/local/bin' and make it executable
