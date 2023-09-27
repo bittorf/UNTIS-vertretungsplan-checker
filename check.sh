@@ -12,7 +12,7 @@ NOTIFY="$3"				# e.g. JID => 49176xxxXXXxx@s.whatsapp.net
 command -v 'phantomjs' >/dev/null || { echo "missing 'phantomjs' in PATH from https://phantomjs.org/download.html"; exit 1; }
 command -v 'mdtest'    >/dev/null || { echo "missing 'mdtest' in PATH from https://github.com/tulir/whatsmeow/tree/main/mdtest"; exit 1; }
 
-test -f mdtest.db      || { echo "missing 'mdtest.db' in $PWD - please scan qrcode with 'mdtest'"; exit 1; }
+test -f mdtest.db       || { echo "missing 'mdtest.db' in $PWD - please scan qrcode with 'mdtest'"; exit 1; }
 pidof mdtest >/dev/null || { echo "starting 'mdtest'"; coproc whatsapp_send { mdtest; }; }
 
 SCRIPTDIR="$( CDPATH='' cd -- "$( dirname -- "$0" )" && pwd )"
@@ -86,13 +86,20 @@ while read -r LINE; do {
 	esac
 } done <"$HTML" >"$TEMPFILE"
 
+whatsapp_send_image()
+{
+	echo "sendimg $NOTIFY $IMAGE" >&"${whatsapp_send[1]}"
+
+	while read -r LINE; do {
+		case "$LINE" in *"was delivered to $NOTIFY at"*) echo "[OK] send to $NOTIFY" ;; esac
+	} done <&"${whatsapp_send[0]}"
+}
+
 if grep -q "$PATTERN" "$TEMPFILE"; then
 	# html_screenshot debug
 	IMAGE="$( html_screenshot )"
 	echo "debug: sendimg $NOTIFY $IMAGE"
-
-	echo "Treffer gefunden" && echo "sendimg $NOTIFY $IMAGE" >&"${whatsapp_send[1]}"
-	sleep 3
+	echo "Treffer gefunden" && whatsapp_send_image
 else
 	echo "kein Treffer für '$PATTERN'"
 fi
