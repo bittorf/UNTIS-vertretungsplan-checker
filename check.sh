@@ -91,7 +91,7 @@ whatsapp_send_image()
 	echo "sendimg $NOTIFY $IMAGE" >&"${whatsapp_send[1]}"
 
 	while read -r LINE; do {
-		case "$LINE" in *"was delivered to $NOTIFY at"*) echo "[OK] send to $NOTIFY" ;; esac
+		case "$LINE" in *"was delivered to $NOTIFY at"*) echo "[OK] send to $NOTIFY" && return ;; esac
 	} done <&"${whatsapp_send[0]}"
 }
 
