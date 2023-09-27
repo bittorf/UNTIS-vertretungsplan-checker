@@ -12,21 +12,16 @@ NOTIFY="$3"				# e.g. JID => 49176xxxXXXxx@s.whatsapp.net
 command -v 'phantomjs' >/dev/null || { echo "missing 'phantomjs' in PATH from https://phantomjs.org/download.html"; exit 1; }
 command -v 'mdtest'    >/dev/null || { echo "missing 'mdtest' in PATH from https://github.com/tulir/whatsmeow/tree/main/mdtest"; exit 1; }
 
-test -f mdtest.db       || { echo "missing 'mdtest.db' in $PWD - please scan qrcode with 'mdtest'"; exit 1; }
-pidof mdtest >/dev/null || { echo "starting 'mdtest'"; coproc whatsapp_send { mdtest; }; }
+test -f mdtest.db || { echo "missing 'mdtest.db' in '$PWD' - please run 'mdtest' and scan qrcode"; exit 1; }
 
 SCRIPTDIR="$( CDPATH='' cd -- "$( dirname -- "$0" )" && pwd )"
 cd "$SCRIPTDIR"        || exit 1
 TEMPFILE="$( mktemp )" || exit 1
 
+LOG="$SCRIPTDIR/log.txt"
 HTML="$SCRIPTDIR/data/plan.html"
 mkdir -p "$SCRIPTDIR/data"
 test -d "$SCRIPTDIR/data/.git" || ( cd "$SCRIPTDIR/data" && git init )
-
-log()
-{
-	echo "$*" >>"$SCRIPTDIR/log.txt"
-}
 
 html_screenshot()
 {
@@ -88,6 +83,8 @@ while read -r LINE; do {
 
 whatsapp_send_image()
 {
+	pidof mdtest || return 1
+	coproc whatsapp_send { mdtest; }
 	echo "sendimg $NOTIFY $IMAGE" >&"${whatsapp_send[1]}"
 
 	while read -r LINE; do {
@@ -95,11 +92,16 @@ whatsapp_send_image()
 	} done <&"${whatsapp_send[0]}"
 }
 
-if grep -q "$PATTERN" "$TEMPFILE"; then
-	# html_screenshot debug
-	IMAGE="$( html_screenshot )"
-	echo "debug: sendimg $NOTIFY $IMAGE"
-	echo "Treffer gefunden" && whatsapp_send_image
+if MATCH="$( grep "$PATTERN" "$TEMPFILE" )"; then
+	HASH="$( echo "$MATCH" | md5sum | cut -d' ' -f1 )"
+
+	if grep -sq "$HASH to $NOTIFY" "$LOG"; then
+		echo "Treffer gefunden, schon benachrichtigt"
+	else
+		IMAGE="$( html_screenshot )"
+		echo "Treffer gefunden, sende Nachricht" && whatsapp_send_image
+		echo "$( date ) send $HASH to $NOTIFY" >>"$LOG"
+	fi
 else
 	echo "kein Treffer für '$PATTERN'"
 fi
