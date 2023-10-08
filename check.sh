@@ -26,10 +26,10 @@ test -d "$SCRIPTDIR/data/.git" || ( cd "$SCRIPTDIR/data" && git init )
 
 html_screenshot()
 {
-	local input_file="$1"		# must? be named *.html
+	local url="$1"			# e.g. file:///path/to/foo.html OR http://..
 	local output_image="$2"		# must have a valid extension, e.g. *.png
+	local script
 
-	local script url="file://$( readlink -f "$input_file" )"
 	script="$( mktemp -d )" || return 1
 	script="$script/phantom.js"
 
@@ -39,11 +39,14 @@ page.open('$url', function() {
     setTimeout(function() {
         page.render('$output_image');
         phantom.exit();
-    }, 2000);
+    }, 200);
 });
 EOF
+
 	phantomjs --script-language=javascript "$script" || return 1
 	rm -fR "$script"
+
+	echo "$output_image"
 }
 
 # e.g.: https://vplan.jenaplan-weimar.de/Vertretungsplaene/SchuelerInnen/subst_001.htm
@@ -104,7 +107,7 @@ if MATCH="$( grep "$PATTERN" "$TEMPFILE" )"; then
 	if grep -sq "$HASH to $NOTIFY" "$LOG"; then
 		echo "Treffer gefunden, schon benachrichtigt"
 	else
-		IMAGE="$( html_screenshot "$TEMPFILE" plan.png )"
+		IMAGE="$( html_screenshot "file://$TEMPFILE" plan.png )"
 		echo "Treffer gefunden, sende Nachricht" && whatsapp_send_image "$NOTIFY" "$IMAGE"
 		echo "$( date ) send $HASH to $NOTIFY" >>"$LOG"
 	fi
