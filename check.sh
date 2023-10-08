@@ -15,8 +15,9 @@ command -v 'mdtest'    >/dev/null || { echo "missing 'mdtest' in PATH from https
 test -f mdtest.db || { echo "missing 'mdtest.db' in '$PWD' - please run 'mdtest' and scan qrcode"; exit 1; }
 
 SCRIPTDIR="$( CDPATH='' cd -- "$( dirname -- "$0" )" && pwd )"
-cd "$SCRIPTDIR"        || exit 1
-TEMPFILE="$( mktemp )" || exit 1
+cd "$SCRIPTDIR"           || exit 1
+TEMPFILE="$( mktemp -d )" || exit 1
+TEMPFILE="$TEMPFILE/index.html"
 
 LOG="$SCRIPTDIR/log.txt"
 HTML="$SCRIPTDIR/data/plan.html"
@@ -25,23 +26,24 @@ test -d "$SCRIPTDIR/data/.git" || ( cd "$SCRIPTDIR/data" && git init )
 
 html_screenshot()
 {
-	local file="$TEMPFILE"
-	local image='plan.png'
-	local url=
+	local input_file="$1"		# must? be named *.html
+	local output_image="$2"		# must have a valid extension, e.g. *.png
 
-	cp "$file" foo.html && url="file://$PWD/foo.html"
+	local script url="file://$( readlink -f "$input_file" )"
+	script="$( mktemp -d )" || return 1
+	script="$script/phantom.js"
 
-	cat >phantomjs.script <<EOF
+	cat >"$script" <<EOF
 var page = require('webpage').create();
 page.open('$url', function() {
     setTimeout(function() {
-        page.render('$image');
+        page.render('$output_image');
         phantom.exit();
-    }, 200);
+    }, 2000);
 });
 EOF
-	phantomjs phantomjs.script
-	rm phantomjs.script foo.html && echo "plan.png"
+	phantomjs --script-language=javascript "$script" || return 1
+	rm -fR "$script"
 }
 
 # e.g.: https://vplan.jenaplan-weimar.de/Vertretungsplaene/SchuelerInnen/subst_001.htm
@@ -83,12 +85,16 @@ while read -r LINE; do {
 
 whatsapp_send_image()
 {
+	local contact="$1"	# is a notify JID, e.g. 49176xxxXXXxx@s.whatsapp.net
+	local image_file="$2"
+	local line
+
 	pidof mdtest || return 1
 	coproc whatsapp_send { mdtest; }
-	echo "sendimg $NOTIFY $IMAGE" >&"${whatsapp_send[1]}"
+	echo "sendimg $contact $image_file" >&"${whatsapp_send[1]}"
 
-	while read -r LINE; do {
-		case "$LINE" in *"was delivered to $NOTIFY at"*) echo "[OK] send to $NOTIFY" && return ;; esac
+	while read -r line; do {
+		case "$line" in *"was delivered to $contact at"*) echo "[OK] send to $contact" && return ;; esac
 	} done <&"${whatsapp_send[0]}"
 }
 
@@ -98,12 +104,12 @@ if MATCH="$( grep "$PATTERN" "$TEMPFILE" )"; then
 	if grep -sq "$HASH to $NOTIFY" "$LOG"; then
 		echo "Treffer gefunden, schon benachrichtigt"
 	else
-		IMAGE="$( html_screenshot )"
-		echo "Treffer gefunden, sende Nachricht" && whatsapp_send_image
+		IMAGE="$( html_screenshot "$TEMPFILE" plan.png )"
+		echo "Treffer gefunden, sende Nachricht" && whatsapp_send_image "$NOTIFY" "$IMAGE"
 		echo "$( date ) send $HASH to $NOTIFY" >>"$LOG"
 	fi
 else
 	echo "kein Treffer für '$PATTERN'"
 fi
 
-rm -f "$TEMPFILE"
+rm -fR "$TEMPFILE"
